@@ -1,0 +1,435 @@
+/**
+ * @class TDGUI.controller.SearchPanel
+ * @extends Ext.app.Controller
+ *
+ * Controller for the panel on the west border of the viewport
+ */
+Ext.define('TDGUI.controller.SearchPanel', {
+  extend: 'Ext.app.Controller',
+//	models: ['Target'],
+//	stores: ['Targets'],
+  views: ['panels.west.SearchPanel', 'panels.BorderCenter'],
+
+  /*refs: [{
+   ref: 'targetPanel',
+   selector: 'TargetPanel'
+   }, {
+   ref: 'formView',
+   selector: 'TargetByNameForm'
+   }, {
+   ref: 'submitButton',
+   selector: '#TargetByNameSubmit_id'
+
+   }],*/
+
+
+  myMask: undefined,
+
+  refs: [
+    {
+      ref: 'protLookup', // I get this.getProtLookup ()
+      selector: 'panel tdgui-chkbox-combo-proteinlookup' // proteinLookup combo
+    },
+    {
+      ref: 'examplesLabel', // I get this.getExamplesLabel
+      selector: 'tdgui-west-panel > panel > label' // label over the proteinLookup combo
+    },
+    {
+      ref: 'contentPanel',
+      selector: 'viewport > tdgui-border-center' // the content area
+    },
+    {
+      ref: 'btnProteinLookup',
+      selector: 'viewport > panel > panel > button'
+    },
+    {
+      ref: 'accTextarea', // accessions textarea
+      selector: 'panel > tdgui-textarea'
+    },
+    {
+      ref: 'itemList', // accessions textarea
+      selector: 'panel > tdgui-item-multilist'
+    }
+  ],
+
+
+  init: function () {
+
+    console.info('SearchPanel controller initializing... ');
+    this.myMask = new Ext.LoadMask(Ext.getBody(), {msg: 'Loading data...'})
+    this.control({
+      'TargetByNameForm button[action=query_target_by_name]': {
+        click: this.submitQuery
+      },
+
+      'TargetByNameForm conceptWikiProteinLookup': {
+        select: this.enableSubmit
+      },
+
+      'tdgui-west-search label': {
+        click: this.labelClick // a window, agenttip or whatever has to be raised with ex
+      },
+
+      'tdgui-chkbox-combo-proteinlookup': {
+        focus: this.clickLookup,
+        keyup: this.keepKeyup
+      },
+
+      'tdgui-textarea': {
+        click: this.textareaClick
+//        afterrender: this.checkTxt
+      },
+
+      'tdgui-west-search panel > agentbar > button[text=Search]': { // see buttons on Panel
+        click: this.retrieveBtnClick
+      },
+
+      'tdgui-west-search > panel button[action=query-protein-info]': {
+//        click: this.clickGoProteinInfo
+        click: this.clickAddProteins
+      },
+
+      'menu[id=listTargetMenu] menuitem[id=targetInfoMenuitem]': {
+        targetinfoMenuEv: this.onTargetInfoSelected
+      },
+
+      'menu[id=listTargetMenu] menuitem[id=targetInteractionsMenuitem]': {
+        targetinteractionsMenuEv: this.onTargetInteractionsSelected
+      }
+
+    });
+    
+  },
+
+
+  /**
+   * Callback after caching the context menu 'targetInfo' selection event. It opens a new tab with the target info for the
+   * target in evOpts.item.data.
+	 * @param [Object] evOpts, options for the event, actually the menuyitem selected plus
+	 * list element data
+   */ 
+  onTargetInfoSelected: function (evOpts) {
+    console.log('SearchPanel controller for info: '+evOpts.item.data.concept_uuid); // HERE item IS UNDEFINED, BUT CAUGHT THE EVENT!!!
+
+    var itemData = evOpts.item.data;
+    var primaryAcc = itemData.uniprot_acc[0];
+    var uniprotParam = 'http://www.uniprot.org/uniprot/'+primaryAcc;
+
+    var conceptUUID = itemData.concept_uuid;
+    var conceptURI = 'http://www.conceptwiki.org/concept/'+conceptUUID;
+
+// get the accession from the table/grid
+//          var accessions = record.data.accessions.join(',')
+
+    var qParam = conceptURI+','+uniprotParam;
+    var dcParam = '&dc='+Math.random();
+    // var targetAcc = record.data.accessions[0];
+    // var targetParam = '&acc='+targetAcc;
+    Ext.History.add('!xt=tdgui-targetinfopanel&qp=' + qParam + dcParam);    
+  },
+
+
+	/**
+	 * Callback after caching the context menu 'targetInfo' selection event. It opens a new tab with the target info for the
+	 * target in evOpts.item.data.
+	 * @param [Object] evOpts, options for the event, actually the menuyitem selected plus
+	 * list element data
+	 */
+  onTargetInteractionsSelected: function (evOpts) {
+    console.log('SearchPanel controller for interactions: '+evOpts.item.data.concept_uuid); // HERE item IS UNDEFINED, BUT CAUGHT THE EVENT!!!
+		var itemData = evOpts.item.data;
+		var primaryAcc = itemData.uniprot_acc[0];
+		var targetName = itemData.name;
+
+		var form = Ext.create('TDGUI.view.misc.InteractionsForm', {
+			uniprot_acc: primaryAcc,
+			targetTitle: targetName
+		});
+
+		var interactionDlgId = 'interactionsDlg';
+/*		var myInteractionsDlg = Ext.getCmp(interactionDlgId);
+		if (myInteractionsDlg !== undefined && this.interactionDlg === undefined)
+			this.interactionDlg = myInteractionsDlg;
+
+		else if (this.interactionDlg === undefined) {
+*/
+			this.interactionDlg = Ext.widget('window', {
+				title: 'Interactions parameters',
+				closeAction: 'destroy',
+				id: interactionDlgId,
+				width: 250,
+				height: 150,
+	//      height: 400,
+	//      minHeight: 400,
+				layout: 'fit',
+				resizable: true,
+				modal: true,
+				items: form
+			});
+
+		this.interactionDlg.show()
+  },
+
+
+  clickLookup: function () {
+    // console.info('*** focus on lookup')
+  },
+
+
+  keepKeyup: function (comp, ev, opts) {
+    comp.inputString = ev.target.value
+  },
+
+
+/**
+ * This is the callback method upon clicking the 'Search' button on the west panel
+ * @param {Ext.Component} btn the button instance which triggered the click event
+ * @param {Event} ev the event instance
+ * @param {Object} opts options
+ */
+  retrieveBtnClick: function (btn, ev, opts) {
+//    var txtArea = btn.up('tdgui-west-search').down('tdgui-textarea')
+//    var uniprotIds = txtArea.getRawValue().split('\n').join(',')
+    var me = this;
+    var uniprotIds = this.getItemList().getStoreItems('uniprot_acc');
+    var concept_uuids = this.getItemList().getStoreItems('concept_uuid');
+    var accessions = [];
+/*
+    Ext.each (uniprotIds, function (accs, index, theIds) {
+      accessions.push(accs[0])
+    })
+*/
+    if (concept_uuids.length > uniprotIds.length)
+      Ext.each (concept_uuids, function (uuid, index, uuids) {
+        var uniprotParam = uniprotIds[index] === undefined? '-': uniprotIds[index][0];
+        accessions.push(uniprotParam+';'+uuid);
+      })
+    else {
+      Ext.each (uniprotIds, function (uniprotSet, index, uuids) {
+        accessions.push(uniprotSet[0]+';'+concept_uuids[index]);
+      })
+    }
+
+    var dc = Math.random();
+    Ext.History.add('!xt=tdgui-multitargetpanel&qp=' + accessions.join(',') + '&dc=' + dc);
+
+    /*
+     if (btn.getId() == 'panelBtnLeft')
+     txtArea.setValue('')
+     else
+     Ext.History.add('!xt=tdgui-multitargetpanel&qp=' + uniprotIds);
+
+     *
+     Ext.Ajax.request({
+     url: 'tdgui_proxy/multiple_entries_retrieval',
+     method: 'GET',
+     params: {
+     entries: uniprotIds
+     },
+
+     success: function(response){
+     var text = response.responseText
+     // console.info ("Got: "+text)
+     var testPanel = Ext.widget ('panel', {
+     title: 'Test Request',
+     html: text,
+     closable: true
+     })
+     me.getContentPanel().add (testPanel)
+     // process server response here
+     }
+     });
+     */
+
+  },
+
+/**
+ * This is the callback method run upon clicking the 'Add' button close to the checkbox-combo to add selected entries
+ * to the multiselection list.
+ * @param {Ext.Component} btn the button which triggered the event
+ * @param {Event} ev the event instance
+ * @param {Object} opts the event options
+ */
+  clickAddProteins: function (btn, ev, opts) {
+    var me = this
+    var protLookup = this.getProtLookup()
+    var listChoices = protLookup.getSelectedItems()
+    /*    var filteredStore = protLookup.store.filter ([{
+     filterFn: function (item) { return if in list }
+     }]) */
+
+    me.myMask.show();
+    var labels = new Array(), uuids = new Array();
+    Ext.each(listChoices, function (choice, index, theChoices) {
+      if (choice.pref_url.indexOf('uniprot') == -1) { // no uniprot on concept_url
+        var label = choice.pref_label;
+        var uuid = choice.uuid;
+        var speciesIndex = label.indexOf('(');
+        if (speciesIndex != -1)
+          label = label.substring(0, speciesIndex - 1);
+
+        labels.push(label);
+        uuids.push(uuid);
+      }
+    })
+
+    var listStore = this.getItemList().getStore()
+    var labelCount = 0
+    Ext.Array.each(labels, function (item, number, theLabels) {
+
+      if (item.indexOf('uniprot') == -1) { // if uniprot, dont go there again
+
+// url = http://ops.conceptwiki.org/web-ws/concept/get?uuid=<uuid>
+// uuid = choice.concept_uuid
+        var url = '/tdgui_proxy/get_uniprot_by_name';
+        var params = {
+          label: item, // The name of the label (name) for the current item
+          uuid: uuids[number]
+        };
+        Ext.Ajax.request({
+          url: url,
+          method: 'GET',
+          params: params,
+
+          failure: function (resp, opts) {
+            console.info('ajax failed for item number: ' + number + ' -> ' + resp.responseText);
+            labelCount++;
+            if (labelCount == labels.length)
+              me.myMask.hide();
+          },
+
+          success: function (resp, opts) {
+//            console.info('success for number ' + number + ' -> ' + resp.responseText)
+
+            var jsonResp = Ext.JSON.decode(resp.responseText);
+            var accessions = jsonResp.accessions;
+            Ext.each(accessions, function (acc, index, accsItself) {
+              var ini = acc.indexOf('>');
+              var end = acc.lastIndexOf('<');
+              acc = acc.substring(ini + 1, end);
+              accsItself[index] = acc;
+            })
+
+            var listItem = {
+              name: item, // target_name for conceptWiki or /uniprot/protein/recommendedname/fullname
+              concept_uuid: listChoices[number].uuid,
+              concept_uri: listChoices[number].ops_uri,
+              uniprot_acc: accessions,
+              uniprot_id: accessions,
+              uniprot_name: jsonResp.name
+            }
+
+            if (resp.responseText == '{}') {
+              listItem.uniprot_acc = '-'
+              listItem.uniprot_id = '-'
+              console.info("Nothing found for: " + item)
+              Ext.Msg.show({
+                 title:'Target information',
+                 msg: "No information about the chosen target ("+item+") was found in uniprot. Some features won't be available.",
+                 buttons: Ext.Msg.OK,
+                 icon: Ext.Msg.WARNING
+              });
+            }
+            else { // as we got some response from uniprot, we try to get the right concept uuid by mapping uniprot url
+              var params = {"uri": TDGUI.Globals.uniprotUrlPrefix+'/'+accessions[0]};
+              var conn = new Ext.data.Connection();
+              conn.async = false;
+              var resp = conn.request ({
+                url: '/tdgui_proxy/map_uniprot_to_cw',
+                params: params,
+                method: 'GET'
+              });
+              
+              var newCWUri = null;
+              if (resp.status != 404 && resp.status != 304) {
+                var jsonObj = JSON.parse(resp.responseText);
+                newCWUri = jsonObj.cw_url;
+              }
+              if (newCWUri !== null && newCWUri !== undefined && newCWUri != '') {
+                listItem.concept_uri = newCWUri;
+                var uuid = newCWUri.split('/').pop();
+                listItem.concept_uuid = uuid;
+              }
+            } // EO else
+
+            var target = Ext.create('TDGUI.model.ListTarget', listItem);
+            listStore.add(target)
+
+            labelCount++
+            if (labelCount == labels.length) {
+							// console.log("clickAddProteins: Ajax request finished");
+              me.myMask.hide();
+						}
+          }
+        }) // EO Ajax request
+      } // EO if
+    })
+
+    btn.disable();
+//    var txtArea = protLookup.up('panel').up('panel').up('panel').down('tdgui-textarea')
+
+    /*
+     var listTargets = txtArea.getRawValue().split('\n')
+     list = listTargets.concat(list)
+     txtArea.setRawValue('')
+     Ext.each(listChoices, function (item, index, listItself) {
+     txtArea.addLine(item)
+     })
+     */
+//    console.info('Added: ' + list.join(','))
+  }, // EO clickAddProteins
+
+
+/**
+ * This method was used to display a target information upon entry selection
+ * @deprecated 
+ * Further changes on requirements removed the use of this method 
+ */
+  clickGoProteinInfo: function (btn, ev, opts) {
+//    console.info('clickGoProteinInfo...')
+    var conceptLookup = this.getProtLookup()
+    var selOption = conceptLookup.getValue()
+    if (selOption != null && selOption != "") {
+//      console.info('button clicked for: ' + selOption)
+    }
+
+    Ext.History.add('!xt=tdgui-targetinfopanel&qp=' + selOption)
+  },
+
+
+  labelClick: function () {
+    console.info('SearchPanel.controller: got click event from label ' + this.getExamplesLabel())
+//						this.getExamplesLabel().setText ('Its ok'))
+  },
+
+
+  textareaClick: function () {
+//    console.info ('click event on textarea with content: '+this.getAccTextarea().getValue())
+  },
+
+
+  checkTxt: function (comp, opts) {
+    console.info('fucking textarea: disabled?' + comp.isDisabled())
+  },
+
+  enableSubmit: function () {
+    var form = this.getFormView();
+    var button = this.getSubmitButton();
+    button.enable();
+  },
+
+
+  submitQuery: function (button) {
+    button.disable();
+    var tp = this.getTargetPanel();
+    tp.startLoading();
+
+    var form = this.getFormView();
+    var target_uri = form.getValues().protein_uri;
+
+
+    Ext.History.add('TargetByNameForm=' + target_uri);
+  },
+
+
+});
