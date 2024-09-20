@@ -1,25 +1,3 @@
-{
-    "format": "linked-data-api",
-    "version": "0.2",
-    "result": {
-        "_about": "http://ops2.few.vu.nl/pharmacology/filters/units/IC50?_format=json",
-        "definition": "http://ops2.few.vu.nl/api-config",
-        "extendedMetadataVersion": "http://ops2.few.vu.nl/pharmacology/filters/units/IC50?_format=json&_metadata=all,views,formats,execution,bindings,site",
-        "primaryTopic": {
-            "_about": "http://www.openphacts.org/chembl/onto/#IC50",
-            "unit": [{
-                "_about": "http://qudt.org/schema/qudt#floatPercentage",
-                "label": "percentage"
-            }, {
-                "_about": "http://www.openphacts.org/units/MicrogramPerMilliliter",
-                "label": "microgram_per_milliliter"
-            }, {
-                "_about": "http://www.openphacts.org/units/Nanomolar",
-                "label": "nanomolar"
-            }],
-            "label": "IC50",
-            "isPrimaryTopicOf": "http://ops2.few.vu.nl/pharmacology/filters/units/IC50?_format=json"
-        }
-    }
-}
-
+version https://git-lfs.github.com/spec/v1
+oid sha256:934bf9f923ff779ae8c44666a9917f9de9294fe0d64f15da3ef25cfa11c55f2a
+size 1048
